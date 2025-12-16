@@ -1,0 +1,31 @@
+{
+  "name": "proyecto-g-bot",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@bochilteam/scraper": "^5.0.1",
+    "@iamtraction/google-translate": "^2.0.1",
+    "@whiskeysockets/baileys": "latest",
+    "awesome-phonenumber": "^6.0.0",
+    "axios": "^1.0.0",
+    "better-sqlite3": "^12.4.6",
+    "chalk": "^5.0.0",
+    "cheerio": "^1.0.0-rc.12",
+    "figlet": "^1.6.0",
+    "file-type": "^16.5.4",
+    "fluent-ffmpeg": "^2.1.2",
+    "fs-extra": "^11.0.0",
+    "jimp-legacy": "npm:jimp@0.16.1",
+    "node-fetch": "^3.3.2",
+    "node-webpmux": "^3.2.1",
+    "pino": "^8.0.0",
+    "qrcode-terminal": "^0.12.0",
+    "uuid": "^13.0.0",
+    "yt-search": "^2.10.0",
+    "ytdl-core": "^4.11.5"
+  }
+}

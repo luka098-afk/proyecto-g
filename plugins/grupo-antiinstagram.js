@@ -1,0 +1,96 @@
+const REGEX = /instagram\.com/i;
+
+export default {
+  command: ["antiinstagram"],
+  
+  run: async ({ conn, m, remoteJid, isGroup, isAdmin, isOwner }) => {
+    // Solo en grupos
+    if (!isGroup) {
+      return await conn.sendText(remoteJid, "⚠️ Este comando solo funciona en grupos.", m);
+    }
+
+    // Solo admins y owner
+    if (!isAdmin && !isOwner) {
+      return await conn.sendText(remoteJid, "⚠️ Solo los administradores pueden usar este comando.", m);
+    }
+
+    // Obtener configuración del grupo
+    const chat = global.db?.data?.chats?.[remoteJid] || {};
+    
+    // Toggle antiInstagram
+    chat.antiInstagram = !chat.antiInstagram;
+
+    // Guardar en DB
+    if (!global.db.data.chats[remoteJid]) {
+      global.db.data.chats[remoteJid] = {};
+    }
+    global.db.data.chats[remoteJid].antiInstagram = chat.antiInstagram;
+
+    await conn.sendText(
+      remoteJid,
+      `✅ *Anti-Instagram ${chat.antiInstagram ? 'activado' : 'desactivado'}*\n\n${
+        chat.antiInstagram 
+          ? '🚫 Los links de Instagram serán eliminados automáticamente.' 
+          : '✅ Los links de Instagram están permitidos.'
+      }`,
+      m
+    );
+  },
+
+  before: async (ctx) => {
+    const { m, conn, remoteJid, isGroup, isAdmin, isBotAdmin, isOwner, participants } = ctx;
+
+    // Solo en grupos
+    if (!isGroup) return;
+
+    // Admins y owner están exentos
+    if (isAdmin || isOwner) return;
+
+    // No procesar si no hay texto
+    if (!m.text) return;
+
+    // Obtener configuración del grupo
+    const chat = global.db?.data?.chats?.[remoteJid] || {};
+
+    // Si antiInstagram no está activo, salir
+    if (!chat.antiInstagram) return;
+
+    // Detectar link de Instagram
+    if (!REGEX.test(m.text)) return;
+
+    // Obtener admins del grupo
+    const groupAdmins = participants.filter(p => p.admin);
+    const adminMentions = groupAdmins.map(v => v.id);
+
+    // Si delete está activo, solo eliminar sin aviso
+    if (chat.delete) {
+      if (isBotAdmin) {
+        await m.delete();
+      }
+      return await conn.sendText(
+        remoteJid,
+        `⚠️ *Link de Instagram detectado*\n\nEl mensaje fue eliminado automáticamente.`,
+        m,
+        { mentions: [m.sender, ...adminMentions] }
+      );
+    }
+
+    // Eliminar con aviso
+    if (isBotAdmin) {
+      await conn.sendText(
+        remoteJid,
+        `⚠️ *Link de Instagram detectado*\n\n@${m.sender.split("@")[0]} envió un link prohibido.\n\nEl mensaje será eliminado.`,
+        null,
+        { mentions: [m.sender, ...adminMentions] }
+      );
+      await m.delete();
+    } else {
+      await conn.sendText(
+        remoteJid,
+        `⚠️ *Link de Instagram detectado*\n\n@${m.sender.split("@")[0]} envió un link prohibido.\n\n_El bot necesita ser admin para eliminar mensajes._`,
+        null,
+        { mentions: [m.sender, ...adminMentions] }
+      );
+    }
+  }
+};
