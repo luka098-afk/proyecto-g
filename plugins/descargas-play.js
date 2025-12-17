@@ -6,23 +6,61 @@ import { existsSync, promises } from "fs"
 
 const execAsync = promisify(exec)
 const ytDlpPath = process.platform === "win32" ? "./node_modules/gs/ygs.exe" : "./node_modules/gs/ygs"
+const cookiesPath = "./lib/cookies.txt"
+
+// ══════════════════════════════════════════════════════
+// 🕐 ANTI-SPAM (2 minutos)
+// ══════════════════════════════════════════════════════
+
+const userCooldowns = {}
 
 export default {
   command: ["play"],
-  run: async ({ conn, m, args, text, remoteJid }) => {
+  run: async ({ conn, m, args, text, remoteJid, senderJid, isOwner }) => {
     try {
+      // ══════════════════════════════════════════════════════
+      // 🚫 VERIFICAR COOLDOWN (Solo usuarios, owner sin límite)
+      // ══════════════════════════════════════════════════════
+
+      if (!isOwner) {
+        const now = Date.now()
+        const cooldownTime = 2 * 60 * 1000 // 2 minutos
+        const userLastUse = userCooldowns[senderJid] || 0
+        const timeLeft = userLastUse + cooldownTime - now
+
+        if (timeLeft > 0) {
+          const seconds = Math.ceil(timeLeft / 1000)
+          const minutes = Math.floor(seconds / 60)
+          const secs = seconds % 60
+          const timeStr = minutes > 0 ? `${minutes}m ${secs}s` : `${secs}s`
+
+          return conn.sendText(
+            remoteJid,
+            `⏰ *Espera ${timeStr}* antes de usar *.play* de nuevo.`,
+            m
+          )
+        }
+
+        // Actualizar último uso
+        userCooldowns[senderJid] = now
+      }
+
+      // ══════════════════════════════════════════════════════
+      // 🎵 PROCESAR COMANDO
+      // ══════════════════════════════════════════════════════
+
       // Limpiar el comando del texto
       let query = (text || "").replace(/^\.play\s*/i, "").trim()
-      
+
       // Si no hay query en text, usar args
       if (!query && args?.length > 0) {
         query = args.join(" ").trim()
       }
-      
+
       if (!query) {
         return conn.sendText(remoteJid, "❗ Debes ingresar un artista y una canción.\n\nEjemplo: .play Canserbero - mundo de piedra", m)
       }
-      
+
       await conn.sendMessage(remoteJid, { react: { text: "⌛", key: m.key } })
 
       const yt_play = await search(query)
@@ -33,8 +71,8 @@ export default {
 
       const url = yt_play[0].url
       const randomFileName = Math.random().toString(36).substring(2, 15)
-      
-      const format = "140/251/249"
+
+      const format = "bestaudio[ext=m4a]/bestaudio/best"
       const messageType = "audio"
       const mimeType = "audio/mp4"
       const fileExtension = ".m4a"
@@ -57,9 +95,24 @@ export default {
         { quoted: m }
       )
 
-      // Descargar
-      const commandStr = `${ytDlpPath} -f "${format}" --extractor-args "youtube:player_client=default" --no-warnings -o "${outputPath}" "${url}"`
+      // ══════════════════════════════════════════════════════
+      // 🍪 DESCARGAR CON COOKIES
+      // ══════════════════════════════════════════════════════
+
+      // Verificar si existe el archivo de cookies
+      const useCookies = existsSync(cookiesPath)
       
+      if (useCookies) {
+        console.log("🍪 Usando cookies desde:", cookiesPath)
+      } else {
+        console.log("⚠️ No se encontró cookies.txt, descargando sin cookies")
+      }
+
+      // Construir comando con cookies si existen
+      const cookiesFlag = useCookies ? `--cookies "${cookiesPath}"` : ""
+      
+      const commandStr = `${ytDlpPath} -f "${format}" ${cookiesFlag} --extractor-args "youtube:player_client=default" --no-warnings -o "${outputPath}" "${url}"`
+
       let execResult
       try {
         execResult = await execAsync(commandStr)
