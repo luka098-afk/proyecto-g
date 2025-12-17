@@ -1,36 +1,114 @@
-#!/bin/bash
-# ══════════════════════════════════════════════════════
-# 🔄 .update - Actualización rápida del bot
-# ══════════════════════════════════════════════════════
+import { execSync } from 'child_process'
+import fs from 'fs'
 
-# Colores
-G='\033[0;32m'
-Y='\033[1;33m'
-B='\033[0;34m'
-R='\033[0;31m'
-NC='\033[0m'
+export default {
+  command: ['update', 'actualizar'],
+  owner: true,
 
-echo -e "${B}🔄 Actualizando bot...${NC}\n"
+  run: async ({ conn, m, remoteJid }) => {
+    try {
+      await conn.sendText(remoteJid, '🔄 *Verificando actualizaciones...*', m)
 
-# Verificar actualizaciones
-git fetch origin main 2>/dev/null || git fetch origin master 2>/dev/null
+      // ─────────────────────────────────────
+      // 📡 FETCH REMOTO
+      // ─────────────────────────────────────
+      try {
+        execSync('git fetch origin main', { stdio: 'pipe' })
+      } catch {
+        execSync('git fetch origin master', { stdio: 'pipe' })
+      }
 
-if [ "$(git rev-parse HEAD)" = "$(git rev-parse @{u})" ]; then
-    echo -e "${G}✅ Ya estás actualizado${NC}"
-    exit 0
-fi
+      // ─────────────────────────────────────
+      // 📋 VERIFICAR SI HAY CAMBIOS
+      // ─────────────────────────────────────
+      const diff = execSync(
+        'git diff HEAD @{u} --name-only',
+        { encoding: 'utf8' }
+      ).trim()
 
-echo -e "${Y}📦 Descargando cambios...${NC}"
+      if (!diff) {
+        return await conn.sendText(
+          remoteJid,
+          '✅ *El bot ya está actualizado*\n\nNo hay cambios nuevos en GitHub.',
+          m
+        )
+      }
 
-# Pull preservando archivos locales
-git stash push -m "auto-backup" --quiet 2>/dev/null || true
-git pull --strategy-option=ours origin main 2>/dev/null || git pull --strategy-option=ours origin master 2>/dev/null
+      const files = diff.split('\n').filter(Boolean)
 
-# Verificar si package.json cambió
-if git diff HEAD@{1} HEAD -- package.json &>/dev/null; then
-    echo -e "${Y}📦 Actualizando dependencias...${NC}"
-    npm install --quiet
-fi
+      let list = files.slice(0, 10).map(f => `• ${f}`).join('\n')
+      if (files.length > 10) {
+        list += `\n• ... y ${files.length - 10} más`
+      }
 
-echo -e "${G}✅ Bot actualizado${NC}"
-echo -e "${B}ℹ️  Reinicia: npm start${NC}"
+      await conn.sendText(
+        remoteJid,
+        `📦 *Actualizaciones disponibles*\n\n${list}\n\n⏳ Actualizando...`,
+        m
+      )
+
+      // ─────────────────────────────────────
+      // 💾 STASH AUTOMÁTICO
+      // ─────────────────────────────────────
+      try {
+        execSync(
+          `git stash push -m "auto-update-${Date.now()}"`,
+          { stdio: 'pipe' }
+        )
+      } catch {}
+
+      // ─────────────────────────────────────
+      // ⬇️ PULL SEGURO (MERGE)
+      // ─────────────────────────────────────
+      try {
+        execSync(
+          'git pull origin main --no-rebase',
+          { stdio: 'pipe' }
+        )
+      } catch {
+        execSync(
+          'git pull origin master --no-rebase',
+          { stdio: 'pipe' }
+        )
+      }
+
+      // ─────────────────────────────────────
+      // 📦 DEPENDENCIAS
+      // ─────────────────────────────────────
+      if (files.includes('package.json')) {
+        await conn.sendText(
+          remoteJid,
+          '📦 *package.json cambió*\nActualizando dependencias...',
+          m
+        )
+        execSync('npm install', { stdio: 'pipe' })
+      }
+
+      // ─────────────────────────────────────
+      // 🔄 MENSAJE FINAL
+      // ─────────────────────────────────────
+      await conn.sendText(
+        remoteJid,
+        `✅ *Bot actualizado correctamente*\n\n📝 Archivos: ${files.length}\n🔄 Reiniciando...`,
+        m
+      )
+
+      setTimeout(() => process.exit(0), 2000)
+
+    } catch (err) {
+      console.error('[UPDATE ERROR]', err)
+
+      let msg = '❌ *Error al actualizar*\n\n'
+
+      if (String(err).includes('not a git repository')) {
+        msg += 'Este bot no está vinculado a un repositorio Git.'
+      } else if (String(err).includes('identity unknown')) {
+        msg += 'Git no tiene configurado user.name / user.email.'
+      } else {
+        msg += '```' + err.message + '```'
+      }
+
+      await conn.sendText(remoteJid, msg, m)
+    }
+  }
+}
