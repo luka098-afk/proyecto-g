@@ -4,20 +4,6 @@ function cleanNum(jid) {
   return String(jid || "").replace(/[^0-9]/g, "").trim()
 }
 
-function normalizeJid(jid) {
-  if (!jid.includes('@')) {
-    return `${jid}@s.whatsapp.net`
-  }
-  if (jid.includes('@lid')) {
-    return jid.replace('@lid', '@s.whatsapp.net')
-  }
-  return jid
-}
-
-function isValidNumber(num) {
-  return num && num.length > 5 && /^[0-9]+$/.test(num)
-}
-
 export default {
   command: ["gpu"],
 
@@ -59,10 +45,10 @@ export default {
 
       // Opción 3: Número como argumento
       if (!targetJid && args[0]) {
-        const cleanArg = args[0].replace(/[@]/g, "").replace(/[^0-9]/g, "")
-        if (isValidNumber(cleanArg)) {
-          targetJid = `${cleanArg}@s.whatsapp.net`
+        const cleanArg = args[0].replace(/[@+]/g, "").replace(/[^0-9]/g, "")
+        if (cleanArg.length > 5 && /^[0-9]+$/.test(cleanArg)) {
           targetNum = cleanArg
+          targetJid = `${cleanArg}@s.whatsapp.net`
           targetName = cleanArg
         }
       }
@@ -75,10 +61,12 @@ export default {
       }
 
       // ══════════════════════════════════════════════════════
-      // 🔧 NORMALIZAR JID
+      // 🔧 EXTRAER NÚMERO REAL
       // ══════════════════════════════════════════════════════
-      targetJid = normalizeJid(targetJid)
-      targetNum = cleanNum(targetJid)
+      
+      if (!targetNum) {
+        targetNum = cleanNum(targetJid)
+      }
 
       // ══════════════════════════════════════════════════════
       // ⏳ REACCIÓN DE CARGA
@@ -88,100 +76,133 @@ export default {
           react: { text: '🖼️', key: m.key }
         })
       } catch (err) {
-        console.log(`⚠️ No se pudo reaccionar con carga: ${err.message}`)
+        console.log(`⚠️ No se pudo reaccionar: ${err.message}`)
       }
 
       // ══════════════════════════════════════════════════════
-      // 🖼️ OBTENER FOTO DE PERFIL
+      // 🔍 INTENTAR OBTENER FOTO CON MÚLTIPLES FORMATOS
       // ══════════════════════════════════════════════════════
+      
       let profileBuffer = null
+      const jidsToTry = [
+        targetJid,                           // Original (puede ser @lid o @s.whatsapp.net)
+        `${targetNum}@s.whatsapp.net`,      // Formato estándar
+        `${targetNum}@lid`,                  // Formato LID
+      ]
 
-      try {
-        // Intento 1: Obtener imagen en tamaño normal
+      // Eliminar duplicados
+      const uniqueJids = [...new Set(jidsToTry)]
+
+      console.log(`🔍 Intentando obtener foto de perfil:`)
+      console.log(`   Número objetivo: ${targetNum}`)
+      console.log(`   JIDs a intentar: ${uniqueJids.join(', ')}`)
+
+      for (const jid of uniqueJids) {
+        if (profileBuffer) break // Ya encontramos la foto
+
+        // Intento con 'image'
         try {
-          const profilePicUrl = await conn.profilePictureUrl(targetJid, 'image')
+          console.log(`   📡 Intentando (image): ${jid}`)
+          const profilePicUrl = await conn.profilePictureUrl(jid, 'image')
           if (profilePicUrl) {
             const response = await fetch(profilePicUrl)
             if (response.ok) {
               profileBuffer = await response.buffer()
+              console.log(`   ✅ Foto encontrada con: ${jid}`)
+              break
             }
           }
-        } catch (err1) {
-          console.log(`⚠️ No se pudo obtener foto (image): ${err1.message}`)
+        } catch (err) {
+          console.log(`   ❌ Falló (image) con ${jid}: ${err.message}`)
+        }
 
-          // Intento 2: Obtener imagen en tamaño preview
-          try {
-            const profilePicUrl = await conn.profilePictureUrl(targetJid, 'preview')
-            if (profilePicUrl) {
-              const response = await fetch(profilePicUrl)
-              if (response.ok) {
-                profileBuffer = await response.buffer()
+        // Intento con 'preview'
+        try {
+          console.log(`   📡 Intentando (preview): ${jid}`)
+          const profilePicUrl = await conn.profilePictureUrl(jid, 'preview')
+          if (profilePicUrl) {
+            const response = await fetch(profilePicUrl)
+            if (response.ok) {
+              profileBuffer = await response.buffer()
+              console.log(`   ✅ Foto encontrada con: ${jid}`)
+              break
+            }
+          }
+        } catch (err) {
+          console.log(`   ❌ Falló (preview) con ${jid}: ${err.message}`)
+        }
+      }
+
+      // Si estamos en grupo, intentar obtener el JID real desde metadata
+      if (!profileBuffer && isGroup) {
+        try {
+          console.log(`   🔍 Buscando en metadata del grupo...`)
+          const groupMetadata = await conn.groupMetadata(remoteJid)
+          const participant = groupMetadata.participants.find(p => {
+            const pNum = cleanNum(p.id)
+            return pNum === targetNum
+          })
+
+          if (participant) {
+            console.log(`   📋 JID real encontrado en metadata: ${participant.id}`)
+            
+            // Intentar con el JID real del grupo
+            try {
+              const profilePicUrl = await conn.profilePictureUrl(participant.id, 'image')
+              if (profilePicUrl) {
+                const response = await fetch(profilePicUrl)
+                if (response.ok) {
+                  profileBuffer = await response.buffer()
+                  console.log(`   ✅ Foto encontrada con JID del grupo`)
+                }
               }
+            } catch (err) {
+              console.log(`   ❌ Falló con JID del grupo: ${err.message}`)
             }
-          } catch (err2) {
-            console.log(`⚠️ No se pudo obtener foto (preview): ${err2.message}`)
           }
+        } catch (err) {
+          console.log(`   ⚠️ No se pudo obtener metadata: ${err.message}`)
         }
+      }
 
-        // ══════════════════════════════════════════════════════
-        // 📨 ENVIAR RESULTADO
-        // ══════════════════════════════════════════════════════
-        if (profileBuffer && profileBuffer.length > 0) {
-          // Enviar foto
+      // ══════════════════════════════════════════════════════
+      // 📨 ENVIAR RESULTADO
+      // ══════════════════════════════════════════════════════
+      
+      if (profileBuffer && profileBuffer.length > 0) {
+        // Enviar foto
+        await conn.sendMessage(remoteJid, {
+          image: profileBuffer,
+          caption: `👤 Foto de perfil de @${targetNum}`,
+          mentions: [`${targetNum}@s.whatsapp.net`, `${targetNum}@lid`]
+        }, { quoted: m })
+
+        console.log(`✅ Foto de perfil enviada: @${targetNum}`)
+
+        // Reacción de éxito
+        try {
           await conn.sendMessage(remoteJid, {
-            image: profileBuffer
-          }, { quoted: m })
+            react: { text: '✅', key: m.key }
+          })
+        } catch {}
 
-          console.log(`✅ Foto de perfil enviada: @${targetNum}`)
-
-          // Reacción de éxito
-          try {
-            await conn.sendMessage(remoteJid, {
-              react: { text: '✅', key: m.key }
-            })
-          } catch (err) {
-            console.log(`⚠️ No se pudo reaccionar con éxito: ${err.message}`)
-          }
-
-        } else {
-          // No hay foto disponible
-          await conn.sendText(
-            remoteJid,
-            `❌ *@${targetNum}* no tiene foto visible para todos`,
-            m,
-            { mentions: [targetJid] }
-          )
-
-          console.log(`⚠️ Sin foto disponible: @${targetNum}`)
-
-          // Reacción de error
-          try {
-            await conn.sendMessage(remoteJid, {
-              react: { text: '❌', key: m.key }
-            })
-          } catch (err) {
-            console.log(`⚠️ No se pudo reaccionar con error: ${err.message}`)
-          }
-        }
-
-      } catch (err) {
-        console.error(`❌ Error obteniendo foto: ${err.message}`)
-
+      } else {
+        // No hay foto disponible
         await conn.sendText(
           remoteJid,
-          `❌ Error al obtener foto de perfil.`,
+          `❌ No se pudo obtener la foto de perfil de @${targetNum}\n\n_Puede que:\n• No tenga foto de perfil\n• Tenga la privacidad activada\n• El número no esté registrado en WhatsApp_`,
           m,
-          { mentions: [senderJid] }
+          { mentions: [`${targetNum}@s.whatsapp.net`, `${targetNum}@lid`] }
         )
+
+        console.log(`⚠️ Sin foto disponible: @${targetNum}`)
 
         // Reacción de error
         try {
           await conn.sendMessage(remoteJid, {
             react: { text: '❌', key: m.key }
           })
-        } catch (e) {
-          console.log(`⚠️ No se pudo reaccionar: ${e.message}`)
-        }
+        } catch {}
       }
 
     } catch (err) {
@@ -190,11 +211,9 @@ export default {
 
       try {
         await conn.sendMessage(remoteJid, {
-          react: { text: '❌', key: m.key }
+          react: { text: '⚠️', key: m.key }
         })
-      } catch (e) {
-        console.log(`⚠️ No se pudo reaccionar: ${e.message}`)
-      }
+      } catch {}
     }
   }
 }
