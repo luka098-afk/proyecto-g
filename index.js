@@ -266,7 +266,6 @@ async function startBot() {
       browser: CONFIG.browser,
       markOnlineOnConnect: true,
       generateHighQualityLinkPreview: true,
-      getMessage: async () => ({ conversation: '' }),
       syncFullHistory: false,
       defaultQueryTimeoutMs: undefined
     })
