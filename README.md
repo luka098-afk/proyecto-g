@@ -24,8 +24,8 @@ Bot de WhatsApp multiusuario con sistema de blacklist, anti-llamadas, y múltipl
 ### 1️⃣ Clonar el repositorio
 
 ```bash
-git clone https://github.com/TU_USUARIO/proyecto-g-bot.git
-cd proyecto-g-bot
+git clone https://github.com/luka098-afk/proyecto-g.git
+cd proyecto-g
 ```
 
 ### 2️⃣ Instalar dependencias
