@@ -1,12 +1,12 @@
 export default {
   // 👑 Dueños del bot (NÚMERO PRINCIPAL PRIMERO)
-  owner: ["598", "598"],
+  owner: ["59896026646", "598"],
 
   // 📛 Nombre del bot
   name: "Proyecto G",
 
   // 📱 Número del bot (para pairing code)
-  number: "598",
+  number: "59896026646",
 
   // 👤 Datos extendidos de owners
   ownerData: [

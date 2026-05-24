@@ -101,7 +101,6 @@ export default {
 ──────────────
 📲 *IA* 📲
 ──────────────
-• .*bot* - \`habla con chatgpt\`
 • .*imagen* - \`busca una imagen en google\`
 • .*gemini* - \`habla con gemini\`
 • .*quitarfondo* - \`quita fondo a una imagen\`
@@ -164,3 +163,4 @@ export default {
     }
   }
 };
+ 

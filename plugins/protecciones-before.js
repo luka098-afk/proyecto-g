@@ -283,7 +283,7 @@ export default {
       // ══════════════════════════════════════════════════════
       // 📊 ANTIESTADO
       // ══════════════════════════════════════════════════════
-      if (chat.antiestado) {
+if (chat.antiestado) {
         const groupStatusMentionMessage = m.message?.groupStatusMentionMessage
 
         if (groupStatusMentionMessage) {
@@ -297,27 +297,6 @@ export default {
             })
           } catch (err) {
             console.error(`⚠️ Error eliminando mensaje: ${err.message}`)
-          }
-
-          // Notificar silenciosa a admins
-          try {
-            const metadata = await conn.groupMetadata(remoteJid)
-            const admins = metadata.participants.filter(p => p.admin).map(p => p.id)
-
-            let adminMsg = `📊 *ESTADO ETIQUETADO DETECTADO*\n\n`
-            adminMsg += `👤 Usuario: @${num}\n`
-            adminMsg += `📍 Grupo: ${metadata.subject}\n`
-            adminMsg += `⚠️ Usuario eliminado`
-
-            for (const admin of admins) {
-              try {
-                await conn.sendMessage(admin, { text: adminMsg }, { mentions: [senderJid] })
-              } catch (e) {
-                console.error(`⚠️ Error notificando admin:`, e.message)
-              }
-            }
-          } catch (err) {
-            console.error(`⚠️ Error notificando admins: ${err.message}`)
           }
 
           // Eliminar usuario
@@ -349,7 +328,6 @@ export default {
       if (!global.messageCache) {
         global.messageCache = {}
       }
-
       // ══════════════════════════════════════════════════════
       // 💾 GUARDAR TODOS LOS MENSAJES
       // ══════════════════════════════════════════════════════
